@@ -1,12 +1,13 @@
 module HttpExample exposing (..)
 
-import Html exposing (Html, Attribute, img, span, div, h2, button, text)
+import Html exposing (Html, Attribute, img, span, div, h2, button, text, input)
 import Html.App as App
 import Html.Attributes exposing (..)
-import Html.Events exposing (onClick)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Json
 import Task
+import Time exposing (Time, second)
 
 
 main =
@@ -26,12 +27,14 @@ type alias Model =
     { topic : String
     , gifUrl : String
     , loading : Bool
+    , delay : Int
+    , topicChanged : Bool
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model "cats" "waiting.gif" False, Cmd.none )
+    ( Model "cats" "http://i.giphy.com/mv1YxAXfJqMdW.gif" False 0 False, Cmd.none )
 
 
 
@@ -40,6 +43,8 @@ init =
 
 type Msg
     = MorePlease
+    | ChangeTopic String
+    | Tick Time
     | FetchSucceed String
     | FetchFail Http.Error
 
@@ -51,10 +56,28 @@ update msg model =
             ( { model | loading = True }, getRandomGif model.topic )
 
         FetchSucceed newUrl ->
-            ( Model model.topic newUrl False, Cmd.none )
+            ( { model | loading = False, gifUrl = newUrl }, Cmd.none )
 
         FetchFail _ ->
-            ( { model | loading = False }, Cmd.none )
+            ( { model | loading = False, gifUrl = "http://i.giphy.com/mv1YxAXfJqMdW.gif" }, Cmd.none )
+
+        ChangeTopic topic ->
+            ( { model
+                | topic = topic
+                , delay = 2
+                , topicChanged = True
+              }
+            , Cmd.none
+            )
+
+        Tick newTime ->
+            if model.topicChanged then
+                if model.delay == 0 then
+                    ( { model | loading = True, topicChanged = False }, getRandomGif model.topic )
+                else
+                    ( { model | delay = model.delay - 1 }, Cmd.none )
+            else
+                ( model, Cmd.none )
 
 
 getRandomGif : String -> Cmd Msg
@@ -77,7 +100,7 @@ decodeGifUrl =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    Time.every second Tick
 
 
 
@@ -89,13 +112,17 @@ view model =
     let
         loadingMsg =
             if model.loading then
-                "Loading..."
+                " (Loading...)"
             else
                 ""
     in
-        div []
-            [ h2 [] [ text model.topic ]
-            , span [] [ text loadingMsg ]
+        div [ style [ ( "margin", "20px" ) ] ]
+            [ h2 [] [ text (model.topic ++ loadingMsg) ]
+            , div []
+                [ input [ onInput ChangeTopic ] []
+                ]
+            , div [] []
             , img [ src model.gifUrl ] []
+            , div [] []
             , button [ onClick MorePlease ] [ text "More Please!" ]
             ]

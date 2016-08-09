@@ -1,6 +1,6 @@
 module Main exposing (..)
 
-import Html exposing (Html, Attribute, div, h1, button, text)
+import Html exposing (Html, Attribute, div, h1, button, text, img)
 import Html.App as App
 import Html.Attributes exposing (..)
 import Html.Events exposing (onClick)
@@ -21,13 +21,13 @@ main =
 
 
 type alias Model =
-    { dieFace : Int
+    { dieFace : ( Int, Int )
     }
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( Model 1, Cmd.none )
+    ( Model ( 1, 1 ), Cmd.none )
 
 
 
@@ -36,17 +36,17 @@ init =
 
 type Msg
     = Roll
-    | NewFace Int
+    | NewFace ( Int, Int )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Roll ->
-            ( model, Random.generate NewFace (Random.int 1 6) )
+            ( model, Random.generate NewFace (Random.pair (Random.int 1 6) (Random.int 1 6)) )
 
-        NewFace newFace ->
-            ( Model newFace, Cmd.none )
+        NewFace newFaces ->
+            ( Model newFaces, Cmd.none )
 
 
 
@@ -64,7 +64,14 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ h1 [] [ text (toString model.dieFace) ]
-        , button [ onClick Roll ] [ text "Roll" ]
-        ]
+    let
+        ( dice1, dice2 ) =
+            model.dieFace
+    in
+        div [ style [ ( "margin", "20px" ) ] ]
+            [ h1 [] [ text "Dices: " ]
+            , img [ src ("http://www.speedymath.com/images/dice/" ++ (toString dice1) ++ "-border-red.gif") ] []
+            , img [ src ("http://www.speedymath.com/images/dice/" ++ (toString dice2) ++ "-border-red.gif") ] []
+            , div [] []
+            , button [ onClick Roll ] [ text "Roll" ]
+            ]
