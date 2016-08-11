@@ -5,6 +5,7 @@ import Html.App as App
 import Svg exposing (..)
 import Svg.Attributes exposing (..)
 import Time exposing (Time, second)
+import Clock
 
 
 main =
@@ -70,11 +71,5 @@ view model =
             calcHandys model Time.inHours
     in
         div []
-            [ svg [ viewBox "0 0 100 100", width "300px" ]
-                [ circle [ cx "50", cy "50", r "45", fill "#0b79ce" ] []
-                , text' [ x "48", y "18", fill "#FFFFFF", fontSize "10" ] [ text "1" ]
-                , line [ x1 "50", y1 "50", x2 secondHandX, y2 secondHandY, stroke "#023963" ] []
-                , line [ x1 "50", y1 "50", x2 minuteHandX, y2 minuteHandY, stroke "red" ] []
-                ]
-            , div [] [ text (toString <| model) ]
+            [ Clock.clock secondHandX secondHandY minuteHandX minuteHandY
             ]
