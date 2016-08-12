@@ -64,12 +64,14 @@ calcHandys model timeFunc =
 view : Model -> Html Msg
 view model =
     let
-        ( secondHandX, secondHandY ) =
-            calcHandys model Time.inMinutes
+        secondsAngle =
+            (radians 6) * (toFloat ((round <| Time.inSeconds <| model) % 60))
 
-        ( minuteHandX, minuteHandY ) =
-            calcHandys model Time.inHours
+        minutesAngle =
+            (radians 6) * (toFloat ((round <| Time.inMinutes <| model) % 60))
     in
         div []
-            [ Clock.clock secondHandX secondHandY minuteHandX minuteHandY
+            [ Clock.clock secondsAngle minutesAngle
+            , div [] [ text (toString ((round <| Time.inSeconds <| model) % 60)) ]
+            , div [] [ text <| toString <| secondsAngle ]
             ]
