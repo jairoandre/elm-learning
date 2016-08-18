@@ -65,13 +65,13 @@ view : Model -> Html Msg
 view model =
     let
         secondsAngle =
-            (radians 6) * (toFloat ((round <| Time.inSeconds <| model) % 60))
+            6.0 * (toFloat ((round <| Time.inSeconds <| model) % 60))
 
         minutesAngle =
-            (radians 6) * (toFloat ((round <| Time.inMinutes <| model) % 60))
+            6.0 * (toFloat ((round <| Time.inMinutes <| model) % 60))
     in
         div []
             [ Clock.clock secondsAngle minutesAngle
             , div [] [ text (toString ((round <| Time.inSeconds <| model) % 60)) ]
-            , div [] [ text <| toString <| secondsAngle ]
+            , div [] [ text (toString ((round <| Time.inMinutes <| model) % 60)) ]
             ]
