@@ -3,8 +3,9 @@ import Html.App as App
 import Html.Events exposing (..)
 import Html.Attributes exposing (..)
 import Time exposing (Time)
-import AnimationFrame exposing (times)
-import Keyboard exposing (KeyCode)
+import AnimationFrame
+import Keyboard
+import Random
 
 main =
     App.program
@@ -31,11 +32,14 @@ ballWidth
 ballHeight
     = 60.0
 ballSpeedStart
-    = 8
+    = 16
 ballSpeed
     = ballSpeedStart
 scoreMax
     = 5
+
+initialSeed
+    = Random.initialSeed 424423
 
 type alias Model =
     { ball : Ball
@@ -78,16 +82,85 @@ init =
 -- UPDATE
 
 type Msg
-    = UpdateBall
-    | Loop Time
+    = Loop Time
+    | KeyDownMsg Keyboard.KeyCode
+    | KeyUpMsg Keyboard.KeyCode
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     case message of
-        UpdateBall ->
-            ( model, Cmd.none )
         Loop newTime ->
-            ({ model | ball = (updateBall model.ball) }, Cmd.none)
+            ({ model | ball = (updateBall model.ball), player = (updatePlayer model.player), cpu = (updateCpu model.cpu model.ball) }, Cmd.none)
+
+        KeyDownMsg code ->
+            ({ model | player = (changePaddleDirection model.player code True)}, Cmd.none)
+
+        KeyUpMsg code ->
+            ({ model | player = (changePaddleDirection model.player code False)}, Cmd.none)            
+
+
+limitBorder : Paddle -> Bool -> Float
+limitBorder paddle up =
+    let
+        newY =
+            if up then
+                paddle.y - paddle.s
+            else
+                paddle.y + paddle.s
+    in
+        if newY < 0 then
+            0
+        else
+            if newY > (gameHeight - paddle.h) then
+                gameHeight - paddle.h
+            else
+                newY
+
+
+updatePlayer : Paddle -> Paddle
+updatePlayer paddle =
+    if paddle.u then
+        { paddle | y = (limitBorder paddle True)}
+    else
+        if paddle.d then
+            { paddle | y = (limitBorder paddle False) }
+        else
+            paddle
+
+updateCpu : Paddle -> Ball -> Paddle
+updateCpu cpu ball =
+    let
+        (rnd, seed) = 
+            Random.step (Random.float 0 1) initialSeed
+    in
+        if rnd < 0.2 then
+            if (ball.y + ballHeight) < (cpu.y + (cpu.h / 2)) then
+                { cpu | y = (limitBorder cpu True) }
+            else
+                if ball.y > (cpu.y + (cpu.h / 2)) then
+                    { cpu | y = (limitBorder cpu False) }
+                else
+                    cpu
+        else
+            cpu
+
+
+
+changePaddleDirection : Paddle -> Keyboard.KeyCode -> Bool -> Paddle
+changePaddleDirection player code down =
+    if code == 38 then
+        if down then
+            { player | u = True }
+        else
+            { player | u = False }
+    else
+        if code == 40 then
+            if down then
+                { player | d = True }
+            else
+                { player | d = False }
+        else
+            player
 
 newCoord : Float -> Float -> Float -> Float -> Float
 newCoord coord offSet limit velocity =
@@ -121,8 +194,12 @@ updateBall ball =
 -- SUBSCRIPTIONS
 
 subscriptions : Model -> Sub Msg
-subscriptions model
-    = times Loop
+subscriptions model =
+    Sub.batch
+        [ AnimationFrame.times Loop
+        , Keyboard.ups KeyUpMsg
+        , Keyboard.downs KeyDownMsg
+        ]
 
 -- VIEW
 
@@ -131,10 +208,6 @@ view model =
     div [ style mainWrapStyle ]
         [ div [ style sliderWrapStyle ]
               [ div [ style sliderStyle ] [ board model ] ]
-        , div [ style [("color", "#fff")] ] [ text ("ball x: " ++ (toString model.ball.x)) ]
-        , div [ style [("color", "#fff")] ] [ text ("ball y: " ++ (toString model.ball.y)) ]
-        , div [ style [("color", "#fff")] ] [ text ("ball vx: " ++ (toString model.ball.vx)) ]
-        , div [ style [("color", "#fff")] ] [ text ("ball vy: " ++ (toString model.ball.vy)) ]
         ]
 
 board : Model -> Html Msg
@@ -151,7 +224,7 @@ board model =
 mainWrapStyle : List (String, String)
 mainWrapStyle =
     [ ("background", "radial-gradient(#222,#111)")
-    , ("position", "absolute")
+    , ("position", "fixed")
     , ("width", "100%")
     , ("height", "100%")
     ]
@@ -159,7 +232,6 @@ mainWrapStyle =
 sliderStyle : List (String, String)
 sliderStyle =
     [ ("display", "flex")
-    , ("flex-direction", "column")
     , ("height", "1080px")
     , ("justify-content", "center")
     , ("left", "50%")
