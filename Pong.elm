@@ -26,20 +26,17 @@ paddleWidth
 paddleHeight
     = 240.0
 paddleSpeed
-    = 16.0
+    = 15
 ballWidth
     = 60.0
 ballHeight
     = 60.0
 ballSpeedStart
-    = 16
+    = 20
 ballSpeed
     = ballSpeedStart
 scoreMax
     = 5
-
-initialSeed
-    = Random.initialSeed 424423
 
 type alias Model =
     { ball : Ball
@@ -48,6 +45,8 @@ type alias Model =
     , playerScore : Int
     , cpuScore : Int
     , maxScore : Int
+    , seed  : (Maybe Random.Seed)
+    , rnd : Float
     }
 
 type alias Paddle =
@@ -71,13 +70,20 @@ type alias Ball =
 
 init : (Model, Cmd Msg)
 init =
-    (Model
-        (Ball ((gameWidth / 2) - (ballWidth / 2)) ((gameHeight / 2) - (ballWidth / 2)) ballWidth ballHeight ballSpeed ballSpeed)
-        (Paddle 0.0 ((gameHeight / 2) - (paddleHeight / 2)) paddleWidth paddleHeight paddleSpeed False False)
-        (Paddle (gameWidth - paddleWidth) ((gameHeight / 2) - (paddleHeight / 2)) paddleWidth paddleHeight paddleSpeed False False)
-        0
-        0
-        5, Cmd.none)
+    (Model initBall initPlayer initCpu 0 0 5 Nothing 0, Cmd.none)
+
+initBall : Ball
+initBall =
+    Ball ((gameWidth / 2) - (ballWidth / 2)) ((gameHeight / 2) - (ballWidth / 2)) ballWidth ballHeight ballSpeed ballSpeed
+
+initPlayer : Paddle
+initPlayer =
+    Paddle 0.0 ((gameHeight / 2) - (paddleHeight / 2)) paddleWidth paddleHeight paddleSpeed False False
+
+initCpu : Paddle
+initCpu =
+    Paddle (gameWidth - paddleWidth) ((gameHeight / 2) - (paddleHeight / 2)) paddleWidth paddleHeight paddleSpeed False False
+
 
 -- UPDATE
 
@@ -90,7 +96,41 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update message model =
     case message of
         Loop newTime ->
-            ({ model | ball = (updateBall model.ball), player = (updatePlayer model.player), cpu = (updateCpu model.cpu model.ball) }, Cmd.none)
+            let
+                (rnd, seed) =
+                    case model.seed of
+                        Nothing ->
+                            (0.0, Random.initialSeed <| round <| newTime)
+                    
+                        Just s ->
+                            Random.step (Random.float 0 1) s
+
+                ball = model.ball
+
+                cpuScore =
+                    if (ball.x < 0) then
+                        model.cpuScore + 1
+                    else
+                        model.cpuScore
+
+                playerScore =
+                    if ((ball.x + ball.w) > gameWidth) then
+                        model.playerScore + 1
+                    else
+                        model.playerScore
+
+
+            in
+                ({ model 
+                    | ball = (updateBall model)
+                    , player = (updatePlayer model.player)
+                    , cpu = (updateCpu model.cpu model.ball rnd)
+                    , cpuScore = cpuScore
+                    , playerScore = playerScore
+                    , seed = Just seed
+                    , rnd = rnd
+                }
+                , Cmd.none)
 
         KeyDownMsg code ->
             ({ model | player = (changePaddleDirection model.player code True)}, Cmd.none)
@@ -127,24 +167,18 @@ updatePlayer paddle =
         else
             paddle
 
-updateCpu : Paddle -> Ball -> Paddle
-updateCpu cpu ball =
-    let
-        (rnd, seed) = 
-            Random.step (Random.float 0 1) initialSeed
-    in
-        if rnd < 0.2 then
-            if (ball.y + ballHeight) < (cpu.y + (cpu.h / 2)) then
-                { cpu | y = (limitBorder cpu True) }
-            else
-                if ball.y > (cpu.y + (cpu.h / 2)) then
-                    { cpu | y = (limitBorder cpu False) }
-                else
-                    cpu
+updateCpu : Paddle -> Ball -> Float -> Paddle
+updateCpu cpu ball rnd =
+    if rnd < 0.98 then
+        if (ball.y + ballHeight) < (cpu.y + (cpu.h / 2)) then
+            { cpu | y = (limitBorder cpu True) }
         else
-            cpu
-
-
+            if ball.y > (cpu.y + (cpu.h / 2)) then
+                { cpu | y = (limitBorder cpu False) }
+            else
+                cpu
+    else
+        cpu
 
 changePaddleDirection : Paddle -> Keyboard.KeyCode -> Bool -> Paddle
 changePaddleDirection player code down =
@@ -182,14 +216,55 @@ newVelocity coord offSet limit velocity =
         else
             velocity
 
-updateBall : Ball -> Ball
-updateBall ball =
-    { ball
-        | x = newCoord ball.x ball.w gameWidth ball.vx
-        , y = newCoord ball.y ball.h gameHeight ball.vy
-        , vx = newVelocity ball.x ball.w gameWidth ball.vx
-        , vy = newVelocity ball.y ball.h gameHeight ball.vy
-    }
+updateBall : Model -> Ball
+updateBall model =
+    let
+        ball =            
+            model.ball
+
+        player =
+            model.player
+
+        cpu =
+            model.cpu
+
+        (x, vx) =
+            if (checkCollision ball player) then
+                (player.x + player.w + 1, ball.vx * -1)
+            else
+                if (checkCollision ball cpu) then
+                    (cpu.x - cpu.w - 1, ball.vx * -1)
+                else
+                    (newCoord ball.x ball.w gameWidth ball.vx, newVelocity ball.x ball.w gameWidth ball.vx)
+
+        (y, vy) = (newCoord ball.y ball.h gameHeight ball.vy, newVelocity ball.y ball.h gameHeight ball.vy)
+
+    in
+        { ball | x = x, vx = vx, y = y, vy = vy }
+
+checkAbove : Ball -> Paddle -> Bool
+checkAbove ball paddle =
+    (ball.y + ball.h) < paddle.y
+
+checkBellow : Ball -> Paddle -> Bool
+checkBellow ball paddle =
+    ball.y > (paddle.y + paddle.h)
+
+checkRight : Ball -> Paddle -> Bool
+checkRight ball paddle =
+    ball.x > (paddle.x + paddle.w)
+
+checkLeft : Ball -> Paddle -> Bool
+checkLeft ball paddle =
+    (ball.x + ball.w) < paddle.x
+
+checkCollision : Ball -> Paddle -> Bool
+checkCollision ball paddle =
+    not (  (checkAbove ball paddle)
+        || (checkBellow ball paddle)
+        || (checkLeft ball paddle)
+        || (checkRight ball paddle)
+        )
 
 -- SUBSCRIPTIONS
 
@@ -208,18 +283,21 @@ view model =
     div [ style mainWrapStyle ]
         [ div [ style sliderWrapStyle ]
               [ div [ style sliderStyle ] [ board model ] ]
+        , div [ style [ ("position", "absolute"), ("color", "white") ] ] [ text (toString model.rnd)]
         ]
 
 board : Model -> Html Msg
 board model =
-    div [ style pong ]
-        [ div [ id "player", style <| paddle_player <| model.player ] []
-        , div [ id "cpu", style <| paddle_enemy <| model.cpu ] []
-        , div [ style score_player ] [ text <| toString <| model.playerScore ]
-        , div [ style score_enemy ] [ text <| toString <| model.cpuScore ]
-        , div [ style net ] []
+    div [ style pongStyle ]
+        [ div [ id "player", style <| paddlePlayerStyle <| model.player ] []
+        , div [ id "cpu", style <| paddleEnemyPlayer <| model.cpu ] []
+        , div [ style scorePlayerStyle ] [ text <| toString <| model.playerScore ]
+        , div [ style scoreEnemyStyle ] [ text <| toString <| model.cpuScore ]
+        , div [ style netStyle ] []
         , div [ style <| ballStyle <| model.ball ] []
         ]
+
+-- STYLE
 
 mainWrapStyle : List (String, String)
 mainWrapStyle =
@@ -251,8 +329,8 @@ sliderWrapStyle =
     , ("top", "7vh")
     ]
 
-pong : List (String, String)
-pong =
+pongStyle : List (String, String)
+pongStyle =
     [ ("position", "absolute")
     , ("width", "1920px")
     , ("height", "1080px")
@@ -265,52 +343,52 @@ pong =
     , ("transform", "scale(0.4)")
     ]
 
-paddle : List (String, String)
-paddle =
+paddleStyle : List (String, String)
+paddleStyle =
     [ ("width", "60px")
     , ("height", "240px")
     , ("position", "absolute")
     ]
 
-score : List (String, String)
-score =
+scoreStyle : List (String, String)
+scoreStyle =
     [ ("font", "bold 6em/1 'Robot Mono', monospace")
     , ("top", "80px")
     , ("position", "absolute")
     ]
 
-paddle_player : Paddle -> List (String, String)
-paddle_player p =
-    paddle ++
+paddlePlayerStyle : Paddle -> List (String, String)
+paddlePlayerStyle p =
+    paddleStyle ++
     [ ("background", "hsl(130, 100%, 60%)")
     , ("top", (toString p.y) ++ "px")
     , ("left", (toString p.x) ++ "px")
     ]
 
-paddle_enemy : Paddle -> List (String, String)
-paddle_enemy p =
-    paddle ++
+paddleEnemyPlayer : Paddle -> List (String, String)
+paddleEnemyPlayer p =
+    paddleStyle ++
     [ ("background", "hsl(200, 100%, 60%)")
     , ("top", (toString p.y) ++ "px")
     , ("left", (toString p.x) ++ "px")
     ]
 
-score_player : List (String, String)
-score_player =
-    score ++
+scorePlayerStyle : List (String, String)
+scorePlayerStyle =
+    scoreStyle ++
     [ ("color", "hsl(130, 100%, 60%)")
     , ("left", "180px")
     ]
 
-score_enemy : List (String, String)
-score_enemy =
-    score ++
+scoreEnemyStyle : List (String, String)
+scoreEnemyStyle =
+    scoreStyle ++
     [ ("color", "hsl(200, 100%, 60%)")
     , ("right", "180px")
     ]
 
-net : List (String, String)
-net =
+netStyle : List (String, String)
+netStyle =
     [ ("position", "absolute")
     , ("background", "#666")
     , ("width", "4px")
