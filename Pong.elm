@@ -37,6 +37,10 @@ ballSpeed
     = ballSpeedStart
 scoreMax
     = 5
+ballInitialX
+    = (gameWidth / 2) - (ballWidth / 2)
+ballInitialY
+    = (gameHeight / 2) - (ballHeight / 2)
 
 type alias Model =
     { ball : Ball
@@ -47,6 +51,7 @@ type alias Model =
     , maxScore : Int
     , seed  : (Maybe Random.Seed)
     , rnd : Float
+    , gameCount : Float
     }
 
 type alias Paddle =
@@ -66,15 +71,17 @@ type alias Ball =
     , h : Float
     , vx : Float
     , vy : Float
+    , reseting : Int
+    , lastScored : Int
     }
 
 init : (Model, Cmd Msg)
 init =
-    (Model initBall initPlayer initCpu 0 0 5 Nothing 0, Cmd.none)
+    (Model initBall initPlayer initCpu 0 0 5 Nothing 0 0, Cmd.none)
 
 initBall : Ball
 initBall =
-    Ball ((gameWidth / 2) - (ballWidth / 2)) ((gameHeight / 2) - (ballWidth / 2)) ballWidth ballHeight ballSpeed ballSpeed
+    Ball ballInitialX ballInitialY ballWidth ballHeight ballSpeed ballSpeed 0 0
 
 initPlayer : Paddle
 initPlayer =
@@ -129,6 +136,7 @@ update message model =
                     , playerScore = playerScore
                     , seed = Just seed
                     , rnd = rnd
+                    , gameCount = model.gameCount + 1
                 }
                 , Cmd.none)
 
@@ -228,19 +236,57 @@ updateBall model =
         cpu =
             model.cpu
 
-        (x, vx) =
-            if (checkCollision ball player) then
-                (player.x + player.w + 1, ball.vx * -1)
-            else
-                if (checkCollision ball cpu) then
-                    (cpu.x - cpu.w - 1, ball.vx * -1)
-                else
-                    (newCoord ball.x ball.w gameWidth ball.vx, newVelocity ball.x ball.w gameWidth ball.vx)
+        cpuScored =
+            ball.x < 0
 
-        (y, vy) = (newCoord ball.y ball.h gameHeight ball.vy, newVelocity ball.y ball.h gameHeight ball.vy)
+        playerScored =
+            (ball.x + ball.w) > gameWidth
+
+        ballScored =
+            cpuScored || playerScored
+
+        reseting =
+            if ballScored then
+                100
+            else
+                Basics.max 0 (ball.reseting - 1)
+
+        resetingVx =
+            if ball.reseting <= 5 then
+                if ball.lastScored == 0 then
+                    ballSpeedStart * (-1)
+                else
+                    ballSpeedStart
+            else
+                0
+
+        lastScored =
+            if playerScored then
+                0
+            else
+                1
+
+
+        (x, vx) =
+            if reseting > 0 then
+                (ballInitialX, resetingVx)
+            else
+                if (checkCollision ball player) then
+                    (player.x + player.w + 1, ball.vx * -1)
+                else
+                    if (checkCollision ball cpu) then
+                        (cpu.x - cpu.w - 1, ball.vx * -1)
+                    else
+                        (newCoord ball.x ball.w gameWidth ball.vx, newVelocity ball.x ball.w gameWidth ball.vx)
+
+        (y, vy) =
+            if reseting > 0 then
+                (ballInitialY, resetingVx)
+            else
+                (newCoord ball.y ball.h gameHeight ball.vy, newVelocity ball.y ball.h gameHeight ball.vy)
 
     in
-        { ball | x = x, vx = vx, y = y, vy = vy }
+        { ball | x = x, vx = vx, y = y, vy = vy, reseting = reseting, lastScored = lastScored }
 
 checkAbove : Ball -> Paddle -> Bool
 checkAbove ball paddle =
@@ -283,7 +329,7 @@ view model =
     div [ style mainWrapStyle ]
         [ div [ style sliderWrapStyle ]
               [ div [ style sliderStyle ] [ board model ] ]
-        , div [ style [ ("position", "absolute"), ("color", "white") ] ] [ text (toString model.rnd)]
+        , div [ style [ ("position", "absolute"), ("color", "white") ] ] [ text (toString model.gameCount)]
         ]
 
 board : Model -> Html Msg
