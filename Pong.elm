@@ -2,7 +2,6 @@ module Main exposing (..)
 
 import Html exposing (..)
 import Html.App as App
-import Html.Events exposing (..)
 import Html.Attributes exposing (..)
 import Time exposing (Time)
 import AnimationFrame
@@ -10,6 +9,7 @@ import Keyboard
 import Random
 
 
+main : Program Never
 main =
     App.program
         { init = init
@@ -23,52 +23,40 @@ main =
 -- MODEL
 
 
-gameWidth =
-    1920.0
+config :
+    { gameWidth : Float
+    , gameHeight : Float
+    , paddleWidth : Float
+    , paddleHeight : Float
+    , paddleSpeed : Float
+    , ballWidth : Float
+    , ballHeight : Float
+    , ballStartSpeed : Float
+    , scoreMax : Int
+    }
+config =
+    { gameWidth = 1920.0
+    , gameHeight = 1080.0
+    , paddleWidth = 60.0
+    , paddleHeight = 240.0
+    , paddleSpeed = 20.0
+    , ballWidth = 60.0
+    , ballHeight = 60.0
+    , ballStartSpeed = 20.0
+    , scoreMax = 5
+    }
 
 
-gameHeight =
-    1080.0
-
-
-paddleWidth =
-    60.0
-
-
-paddleHeight =
-    240.0
-
-
-paddleSpeed =
-    20
-
-
-ballWidth =
-    60.0
-
-
-ballHeight =
-    60.0
-
-
-ballSpeedStart =
-    20
-
-
-ballSpeed =
-    ballSpeedStart
-
-
-scoreMax =
-    5
-
-
-ballInitialX =
-    (gameWidth / 2) - (ballWidth / 2)
-
-
-ballInitialY =
-    (gameHeight / 2) - (ballHeight / 2)
+config_ :
+    { ballSpeed : Float
+    , ballInitialX : Float
+    , ballInitialY : Float
+    }
+config_ =
+    { ballSpeed = config.ballStartSpeed
+    , ballInitialX = (config.gameWidth / 2) - (config.ballWidth / 2)
+    , ballInitialY = (config.gameHeight / 2) - (config.ballHeight / 2)
+    }
 
 
 type alias Model =
@@ -114,17 +102,17 @@ init =
 
 initBall : Ball
 initBall =
-    Ball ballInitialX ballInitialY ballWidth ballHeight ballSpeed ballSpeed 0 0
+    Ball config_.ballInitialX config_.ballInitialY config.ballWidth config.ballHeight config_.ballSpeed config_.ballSpeed 0 0
 
 
 initPlayer : Paddle
 initPlayer =
-    Paddle 0.0 ((gameHeight / 2) - (paddleHeight / 2)) paddleWidth paddleHeight paddleSpeed False False
+    Paddle 0.0 ((config.gameHeight / 2) - (config.paddleHeight / 2)) config.paddleWidth config.paddleHeight config.paddleSpeed False False
 
 
 initCpu : Paddle
 initCpu =
-    Paddle (gameWidth - paddleWidth) ((gameHeight / 2) - (paddleHeight / 2)) paddleWidth paddleHeight paddleSpeed False False
+    Paddle (config.gameWidth - config.paddleWidth) ((config.gameHeight / 2) - (config.paddleHeight / 2)) config.paddleWidth config.paddleHeight config.paddleSpeed False False
 
 
 
@@ -160,7 +148,7 @@ update message model =
                         model.cpuScore
 
                 playerScore =
-                    if ((ball.x + ball.w) > gameWidth) then
+                    if ((ball.x + ball.w) > config.gameWidth) then
                         model.playerScore + 1
                     else
                         model.playerScore
@@ -196,8 +184,8 @@ limitBorder paddle up =
     in
         if newY < 0 then
             0
-        else if newY > (gameHeight - paddle.h) then
-            gameHeight - paddle.h
+        else if newY > (config.gameHeight - paddle.h) then
+            config.gameHeight - paddle.h
         else
             newY
 
@@ -214,8 +202,8 @@ updatePlayer paddle =
 
 updateCpu : Paddle -> Ball -> Float -> Paddle
 updateCpu cpu ball rnd =
-    if rnd < 0.2 then
-        if (ball.y + ballHeight) < (cpu.y + (cpu.h / 2)) then
+    if rnd > 0.05 then
+        if (ball.y + config.ballHeight) < (cpu.y + (cpu.h / 2)) then
             { cpu | y = (limitBorder cpu True) }
         else if ball.y > (cpu.y + (cpu.h / 2)) then
             { cpu | y = (limitBorder cpu False) }
@@ -277,7 +265,7 @@ updateBall model =
             ball.x < 0
 
         playerScored =
-            (ball.x + ball.w) > gameWidth
+            (ball.x + ball.w) > config.gameWidth
 
         ballScored =
             cpuScored || playerScored
@@ -291,9 +279,9 @@ updateBall model =
         resetingVx =
             if ball.reseting <= 5 then
                 if ball.lastScored == 0 then
-                    ballSpeedStart * (-1)
+                    config.ballStartSpeed * (-1)
                 else
-                    ballSpeedStart
+                    config.ballStartSpeed
             else
                 0
 
@@ -305,19 +293,19 @@ updateBall model =
 
         ( x, vx ) =
             if reseting > 0 then
-                ( ballInitialX, resetingVx )
+                ( config_.ballInitialX, resetingVx )
             else if (checkCollision ball player) then
                 ( player.x + player.w + 1, ball.vx * -1 )
             else if (checkCollision ball cpu) then
                 ( cpu.x - cpu.w - 1, ball.vx * -1 )
             else
-                ( newCoord ball.x ball.w gameWidth ball.vx, newVelocity ball.x ball.w gameWidth ball.vx )
+                ( newCoord ball.x ball.w config.gameWidth ball.vx, newVelocity ball.x ball.w config.gameWidth ball.vx )
 
         ( y, vy ) =
             if reseting > 0 then
-                ( ballInitialY, resetingVx )
+                ( config_.ballInitialY, resetingVx )
             else
-                ( newCoord ball.y ball.h gameHeight ball.vy, newVelocity ball.y ball.h gameHeight ball.vy )
+                ( newCoord ball.y ball.h config.gameHeight ball.vy, newVelocity ball.y ball.h config.gameHeight ball.vy )
     in
         { ball | x = x, vx = vx, y = y, vy = vy, reseting = reseting, lastScored = lastScored }
 
@@ -371,23 +359,22 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    div [ style mainWrapStyle ]
-        [ div [ style sliderWrapStyle ]
-            [ div [ style sliderStyle ] [ board model ] ]
+    div [ style styles.mainWrapper ]
+        [ div [ style styles.sliderWrapper ]
+            [ div [ style styles.slider ] [ board model ] ]
         , div [ style [ ( "position", "absolute" ), ( "color", "white" ) ] ] [ text (toString model.gameCount) ]
-        , div [ style [ ( "position", "absolute" ), ( "color", "white" ) ] ] [ text (toString model.seed) ]
         ]
 
 
 board : Model -> Html Msg
 board model =
-    div [ style pongStyle ]
-        [ div [ id "player", style <| paddlePlayerStyle <| model.player ] []
-        , div [ id "cpu", style <| paddleEnemyPlayer <| model.cpu ] []
-        , div [ style scorePlayerStyle ] [ text <| toString <| model.playerScore ]
-        , div [ style scoreEnemyStyle ] [ text <| toString <| model.cpuScore ]
-        , div [ style netStyle ] []
-        , div [ style <| ballStyle <| model.ball ] []
+    div [ style styles.pong ]
+        [ div [ id "player", style <| styles_.playerPaddle <| model.player ] []
+        , div [ id "cpu", style <| styles_.enemyPaddle <| model.cpu ] []
+        , div [ style styles_.playerScore ] [ text <| toString <| model.playerScore ]
+        , div [ style styles_.enemyScore ] [ text <| toString <| model.cpuScore ]
+        , div [ style styles.net ] []
+        , div [ style <| styles.ball <| model.ball ] []
         ]
 
 
@@ -395,121 +382,112 @@ board model =
 -- STYLE
 
 
-mainWrapStyle : List ( String, String )
-mainWrapStyle =
-    [ ( "background", "radial-gradient(#222,#111)" )
-    , ( "position", "fixed" )
-    , ( "width", "100%" )
-    , ( "height", "100%" )
-    ]
+styles :
+    { mainWrapper : List ( String, String )
+    , slider : List ( String, String )
+    , sliderWrapper : List ( String, String )
+    , pong : List ( String, String )
+    , paddle : List ( String, String )
+    , score : List ( String, String )
+    , net : List ( String, String )
+    , ball : Ball -> List ( String, String )
+    }
+styles =
+    { mainWrapper =
+        [ ( "background", "radial-gradient(#222,#111)" )
+        , ( "position", "fixed" )
+        , ( "width", "100%" )
+        , ( "height", "100%" )
+        ]
+    , slider =
+        [ ( "display", "flex" )
+        , ( "height", "1080px" )
+        , ( "justify-content", "center" )
+        , ( "left", "50%" )
+        , ( "margin", "-540px 0 0 -960px" )
+        , ( "opacity", "1" )
+        , ( "position", "absolute" )
+        , ( "top", "50%" )
+        , ( "width", "1920px" )
+        ]
+    , sliderWrapper =
+        [ ( "bottom", "calc(7vh + 80px)" )
+        , ( "left", "7vw" )
+        , ( "position", "absolute" )
+        , ( "right", "7vw" )
+        , ( "top", "7vh" )
+        ]
+    , pong =
+        [ ( "position", "absolute" )
+        , ( "width", "1920px" )
+        , ( "height", "1080px" )
+        , ( "left", "0" )
+        , ( "right", "0" )
+        , ( "top", "0" )
+        , ( "bottom", "0" )
+        , ( "margin", "auto" )
+        , ( "box-shadow", "0 0 0 8px #666" )
+        , ( "transform", "scale(0.4)" )
+        ]
+    , paddle =
+        [ ( "width", "60px" )
+        , ( "height", "240px" )
+        , ( "position", "absolute" )
+        ]
+    , score =
+        [ ( "font", "bold 6em/1 'Robot Mono', monospace" )
+        , ( "top", "80px" )
+        , ( "position", "absolute" )
+        ]
+    , net =
+        [ ( "position", "absolute" )
+        , ( "background", "#666" )
+        , ( "width", "4px" )
+        , ( "height", "100%" )
+        , ( "left", "50%" )
+        , ( "top", "0" )
+        , ( "margin", "left -2px" )
+        ]
+    , ball =
+        \ball ->
+            [ ( "position", "absolute" )
+            , ( "background", "#fff" )
+            , ( "width", "60px" )
+            , ( "height", "60px" )
+            , ( "transform", "translate(" ++ (toString ball.x) ++ "px, " ++ (toString ball.y) ++ "px)" )
+            ]
+    }
 
 
-sliderStyle : List ( String, String )
-sliderStyle =
-    [ ( "display", "flex" )
-    , ( "height", "1080px" )
-    , ( "justify-content", "center" )
-    , ( "left", "50%" )
-    , ( "margin", "-540px 0 0 -960px" )
-    , ( "opacity", "1" )
-    , ( "position", "absolute" )
-    , ( "top", "50%" )
-    , ( "width", "1920px" )
-    ]
-
-
-sliderWrapStyle : List ( String, String )
-sliderWrapStyle =
-    [ ( "bottom", "calc(7vh + 80px)" )
-    , ( "left", "7vw" )
-    , ( "position", "absolute" )
-    , ( "right", "7vw" )
-    , ( "top", "7vh" )
-    ]
-
-
-pongStyle : List ( String, String )
-pongStyle =
-    [ ( "position", "absolute" )
-    , ( "width", "1920px" )
-    , ( "height", "1080px" )
-    , ( "left", "0" )
-    , ( "right", "0" )
-    , ( "top", "0" )
-    , ( "bottom", "0" )
-    , ( "margin", "auto" )
-    , ( "box-shadow", "0 0 0 8px #666" )
-    , ( "transform", "scale(0.4)" )
-    ]
-
-
-paddleStyle : List ( String, String )
-paddleStyle =
-    [ ( "width", "60px" )
-    , ( "height", "240px" )
-    , ( "position", "absolute" )
-    ]
-
-
-scoreStyle : List ( String, String )
-scoreStyle =
-    [ ( "font", "bold 6em/1 'Robot Mono', monospace" )
-    , ( "top", "80px" )
-    , ( "position", "absolute" )
-    ]
-
-
-paddlePlayerStyle : Paddle -> List ( String, String )
-paddlePlayerStyle p =
-    paddleStyle
-        ++ [ ( "background", "hsl(130, 100%, 60%)" )
-           , ( "top", (toString p.y) ++ "px" )
-           , ( "left", (toString p.x) ++ "px" )
-           ]
-
-
-paddleEnemyPlayer : Paddle -> List ( String, String )
-paddleEnemyPlayer p =
-    paddleStyle
-        ++ [ ( "background", "hsl(200, 100%, 60%)" )
-           , ( "top", (toString p.y) ++ "px" )
-           , ( "left", (toString p.x) ++ "px" )
-           ]
-
-
-scorePlayerStyle : List ( String, String )
-scorePlayerStyle =
-    scoreStyle
-        ++ [ ( "color", "hsl(130, 100%, 60%)" )
-           , ( "left", "180px" )
-           ]
-
-
-scoreEnemyStyle : List ( String, String )
-scoreEnemyStyle =
-    scoreStyle
-        ++ [ ( "color", "hsl(200, 100%, 60%)" )
-           , ( "right", "180px" )
-           ]
-
-
-netStyle : List ( String, String )
-netStyle =
-    [ ( "position", "absolute" )
-    , ( "background", "#666" )
-    , ( "width", "4px" )
-    , ( "height", "100%" )
-    , ( "left", "50%" )
-    , ( "top", "0" )
-    , ( "margin", "left -2px" )
-    ]
-
-
-ballStyle : Ball -> List ( String, String )
-ballStyle ball =
-    [ ( "position", "absolute" )
-    , ( "background", "#fff" )
-    , ( "width", "60px" )
-    , ( "height", "60px" )
-    , ( "transform", "translate(" ++ (toString ball.x) ++ "px, " ++ (toString ball.y) ++ "px)" )
-    ]
+styles_ :
+    { playerPaddle : Paddle -> List ( String, String )
+    , enemyPaddle : Paddle -> List ( String, String )
+    , playerScore : List ( String, String )
+    , enemyScore : List ( String, String )
+    }
+styles_ =
+    { playerPaddle =
+        \p ->
+            styles.paddle
+                ++ [ ( "background", "hsl(130, 100%, 60%)" )
+                   , ( "top", (toString p.y) ++ "px" )
+                   , ( "left", (toString p.x) ++ "px" )
+                   ]
+    , enemyPaddle =
+        \p ->
+            styles.paddle
+                ++ [ ( "background", "hsl(200, 100%, 60%)" )
+                   , ( "top", (toString p.y) ++ "px" )
+                   , ( "left", (toString p.x) ++ "px" )
+                   ]
+    , playerScore =
+        styles.score
+            ++ [ ( "color", "hsl(130, 100%, 60%)" )
+               , ( "left", "180px" )
+               ]
+    , enemyScore =
+        styles.score
+            ++ [ ( "color", "hsl(200, 100%, 60%)" )
+               , ( "right", "180px" )
+               ]
+    }
